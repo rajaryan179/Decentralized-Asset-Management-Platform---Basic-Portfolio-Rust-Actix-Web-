@@ -1,0 +1,40 @@
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use std::sync::Mutex;
+
+#[derive(Debug, Clone)]
+struct Asset {
+    name: String,
+    value: f64,
+}
+
+struct AppState {
+    portfolio: Mutex<Vec<Asset>>,
+}
+
+async fn add_asset(data: web::Data<AppState>, asset: web::Json<Asset>) -> impl Responder {
+    let mut portfolio = data.portfolio.lock().unwrap();
+    portfolio.push(asset.into_inner());
+    HttpResponse::Ok().body("Asset added!")
+}
+
+async fn get_portfolio(data: web::Data<AppState>) -> impl Responder {
+    let portfolio = data.portfolio.lock().unwrap();
+    HttpResponse::Ok().json(&*portfolio)
+}
+
+#[actix_rt::main]
+async fn main() -> std::io::Result<()> {
+    let portfolio = web::Data::new(AppState {
+        portfolio: Mutex::new(Vec::new()),
+    });
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(portfolio.clone())
+            .route("/add_asset", web::post().to(add_asset))
+            .route("/portfolio", web::get().to(get_portfolio))
+    })
+    .bind("127.0.0.1:8080")?
+    .run()
+    .await
+}
